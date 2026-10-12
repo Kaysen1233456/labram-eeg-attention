@@ -121,57 +121,53 @@ def main():
     print("-" * 74)
     print("Q2  逐被试数据统计（看是否有异常被试）")
     print("-" * 74)
-    print("%-12s %-8s %-10s %-10s %-10s" % ("被试", "n窗", "std(uV)", "alpha比", "备注"))
+    print("%-14s %-6s %-6s %-10s %-10s %s"
+          % ("被试", "n_rest", "n_foc", "std(uV)", "alpha比", "备注"))
     print("-" * 74)
 
-    # 用被试顺序重排：数据是按被试顺序拼接的
-    # train: 11人 x (91+31)，val: 2人，test: 2人（Subject04 的 rest 是 85）
-    subj_order = (meta["train_subjects"] + meta["val_subjects"] + meta["test_subjects"])
-    counts = {}
-    for name, subs in (("train", meta["train_subjects"]),
-                       ("val", meta["val_subjects"]),
-                       ("test", meta["test_subjects"])):
-        Xs = np.load(C.PROCESSED_DIR / ("X_%s_4d.npy" % name))
-        ys = np.load(C.PROCESSED_DIR / ("y_%s.npy" % name))
-        # 按被试切分：每人的窗口数不固定，用累计计数
+    def band_power(sig, lo, hi):
+        f = np.abs(np.fft.rfft(sig, axis=-1)) ** 2
+        m = (freqs >= lo) & (freqs <= hi)
+        return f[..., m].mean(axis=-1)
+
+    anomalies = []
+    for split, subs in (("train", meta["train_subjects"]),
+                        ("val", meta["val_subjects"]),
+                        ("test", meta["test_subjects"])):
+        Xs = np.load(C.PROCESSED_DIR / ("X_%s_4d.npy" % split)).reshape(-1, 8, 400)
+        ys = np.load(C.PROCESSED_DIR / ("y_%s.npy" % split))
         pos = 0
         for s in subs:
-            n_r = 0
-            n_f = 0
-            # 简化：按标签块切（数据是按 rest 块、focus 块拼接的）
             seg = ys[pos:]
-            # 找到 focus 的起始
-            f_idx = np.where(seg == 1)[0]
-            if len(f_idx) > 0:
-                first_f = f_idx[0]
-                n_r = first_f
-                # focus 块长度
-                tail = seg[first_f:]
-                n_f = int((tail == 1).sum())
-                block = Xs[pos:pos + n_r + n_f]
-                counts[s] = (n_r, n_f, block)
+            n_r = 0
+            while n_r < len(seg) and seg[n_r] == 0:
+                n_r += 1
+            n_f = 0
+            while n_r + n_f < len(seg) and seg[n_r + n_f] == 1:
+                n_f += 1
+            if n_r == 0 or n_f == 0:
                 pos += n_r + n_f
+                continue
+            blk = Xs[pos:pos + n_r + n_f]
+            std = float(blk.std())
+            rel = band_power(blk, 8, 13) / np.maximum(band_power(blk, 1, 45), 1e-12)
+            ar = float(rel[:n_r].mean() / max(rel[n_r:n_r + n_f].mean(), 1e-12))
+            notes = []
+            if ar < 1.0:
+                notes.append("alpha方向反了")
+            if abs(std - 12) > 6:
+                notes.append("幅值异常")
+            note = " ".join(notes)
+            if notes:
+                anomalies.append((s, note))
+            print("%-14s %-6d %-6d %-10.2f %-10.3f %s"
+                  % (s + "[" + split[0] + "]", n_r, n_f, std, ar, note))
+            pos += n_r + n_f
 
-    rows = []
-    for s in subj_order:
-        if s not in counts:
-            continue
-        n_r, n_f, block = counts[s]
-        std = float(block.std())
-        # alpha 比（粗略：用 8-13Hz 功率 vs 全带）
-        d = block.reshape(block.shape[0], 8, -1)
-        fft = np.abs(np.fft.rfft(d, axis=-1)) ** 2
-        freqs = np.fft.rfftfreq(d.shape[-1], 1.0 / C.TARGET_SAMPLING_RATE)
-        alpha = fft[:, :, (freqs >= 8) & (freqs <= 13)].mean()
-        total = fft[:, :, (freqs >= 1) & (freqs <= 45)].mean()
-        ar = float(alpha / max(total, 1e-12))
-        note = ""
-        if abs(std - 12) > 6:
-            note += "幅值异常 "
-        rows.append((s, n_r + n_f, std, ar, note))
-
-    for s, n, std, ar, note in rows:
-        print("%-12s %-8d %-10.2f %-10.4f %s" % (s, n, std, ar, note))
+    print("-" * 74)
+    print("  异常被试: %d 人" % len(anomalies))
+    for s, note in anomalies:
+        print("    %-12s %s" % (s, note))
 
     # ---------- Q3: 结论 ----------
     print()
@@ -179,6 +175,9 @@ def main():
     print("Q3  结论")
     print("-" * 74)
     print("  跨被试（固定划分，11/2/2）: BA 0.5549 / 0.5669（全量微调 / 线性探测）")
+    if anomalies:
+        print("  ⚠ 注意：上表中有 %d 名被试的 alpha 方向与多数被试相反，"
+              "这会显著拉低跨被试指标" % len(anomalies))
     print("  随机窗口（泄漏）          : BA %.4f" % m["balanced_accuracy"])
     print()
     if m["balanced_accuracy"] > 0.8:

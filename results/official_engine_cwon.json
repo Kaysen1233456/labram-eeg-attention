@@ -1,0 +1,53 @@
+{
+  "mode": "official_engine",
+  "args": {
+    "epochs": 3,
+    "batch_size": 16,
+    "lr": 0.0002,
+    "min_lr": 1e-06,
+    "warmup_epochs": 1,
+    "weight_decay": 0.05,
+    "layer_decay": 1.0,
+    "no_class_weights": false,
+    "seed": 42,
+    "out": null
+  },
+  "best_epoch": 1,
+  "val": {
+    "accuracy": 0.7489878542510121,
+    "balanced_accuracy": 0.5,
+    "cohen_kappa": 0.0,
+    "f1_weighted": 0.6414942270205428,
+    "loss": 0.6521889828145504
+  },
+  "history": [
+    {
+      "accuracy": 0.7489878542510121,
+      "balanced_accuracy": 0.5,
+      "cohen_kappa": 0.0,
+      "f1_weighted": 0.6414942270205428,
+      "loss": 0.6521889828145504
+    },
+    {
+      "accuracy": 0.7489878542510121,
+      "balanced_accuracy": 0.5,
+      "cohen_kappa": 0.0,
+      "f1_weighted": 0.6414942270205428,
+      "loss": 0.6786133907735348
+    },
+    {
+      "accuracy": 0.7489878542510121,
+      "balanced_accuracy": 0.5,
+      "cohen_kappa": 0.0,
+      "f1_weighted": 0.6414942270205428,
+      "loss": 0.6476287841796875
+    }
+  ],
+  "test": {
+    "accuracy": 0.7459016393442623,
+    "balanced_accuracy": 0.5,
+    "cohen_kappa": 0.0,
+    "f1_weighted": 0.637343184791811,
+    "loss": 0.6545372009277344
+  }
+}

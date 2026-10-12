@@ -147,16 +147,33 @@ criterion = torch.nn.CrossEntropyLoss(weight=w)
 
 ---
 
-## 两种类别权重方案
+## 三条可选路径（怎么用官方脚本）
 
-| | 方案 A（本仓库 `finetune.py`） | 方案 B（官方 `run_class_finetuning.py` + 补丁） |
-|---|---|---|
-| 改动量 | 无（已内置） | 改 2 处 + 加 1 个参数 |
-| 优点 | 自包含、易改、便于接自研评测框架 | 可复用官方的 `layer_decay` / `mixup` / 完整指标 |
-| 缺点 | 未实现 `layer_decay`（用 head/encoder 分组 lr 近似） | 需把数据组织成官方 dataset 格式 |
-| 适用 | 快速验证、对照实验、自研框架 | 正式大规模实验 |
+| | 方案 A<br>`finetune.py` | 方案 B′<br>`finetune_official_engine.py` | 方案 B<br>`run_class_finetuning.py` + 补丁 |
+|---|---|---|---|
+| 训练循环 | 自研 | **官方 `train_one_epoch`** | 官方 |
+| 是否改官方源码 | 不需要 | **不需要** | 需要改 3 处 |
+| 复用官方 `layer_decay` | 用分组 lr 近似 | ✅ 支持（`--layer-decay 0.65`） | ✅ |
+| 指标口径 | 全局计算 BA/F1/AUC | 与官方论文一致 | 与官方论文一致 |
+| 数据格式 | 直接读 npy | 直接读 npy | 需接入 `get_dataset` |
+| 适用 | 快速迭代、接自研评测框架 | **推荐：想要官方口径又不想改源码** | 大规模正式实验 |
 
-**方案 B 补丁**见 [`patch_official.md`](patch_official.md)。
+**推荐方案 B′**：它直接 `import` 官方的 `train_one_epoch` / `evaluate`，把加权 `criterion` 作为参数传进去（官方签名本来就接受），官方仓库**保持零改动**。
+
+```bash
+python eeg_attention/finetune_official_engine.py --epochs 30 --lr 2e-4
+python eeg_attention/finetune_official_engine.py --epochs 30 --layer-decay 0.65
+```
+
+> 交叉验证：方案 A 手算的 `input_chans = [0,20,18,22,38,46,64,62,66]`，与官方 `utils.get_input_chans(['FZ','F3','F4','T7','T8','PZ','P3','P4'])` 的输出**完全一致**。
+
+**方案 B 补丁**（如需改官方源码）见 [`patch_official.md`](patch_official.md)。
+
+### ⚠️ 一个容易踩的差异：官方 `evaluate` 按 batch 算指标
+
+官方 `engine_for_finetuning.evaluate` 是**对每个 batch 单独算指标再平均**。当 batch 内只有一个类别时（小 batch + 类别不平衡场景很常见），`balanced_accuracy` 会失真——实测中单个 batch 曾出现 `balanced_accuracy: 1.0000`，而整体只有 0.5。
+
+本仓库 `finetune.py`（方案 A）改为**先收集全部预测再统一计算**，指标更可靠。用方案 B′ 时请留意这一点，或改用方案 A 的 `evaluate`。
 
 ---
 
