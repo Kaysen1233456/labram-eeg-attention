@@ -1,0 +1,22 @@
+# LaBraM EEG Attention 依赖
+#
+# 安装顺序有讲究：先装 torch（指定 CUDA wheel 源），再装其余。
+#   pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 \
+#       --index-url https://download.pytorch.org/whl/cu118
+#   pip install -r requirements.txt
+#
+# 注意 numpy 必须锁 1.x —— 2.x 与 torch 2.0.1 二进制不兼容，
+# 会导致 torch.from_numpy / pandas / sklearn 全部报错。
+
+numpy==1.26.4
+mne>=1.4
+timm==0.4.12
+einops
+h5py
+scikit-learn
+pandas
+tensorboard
+
+# 不需要 deepspeed：
+#   - Windows 无法编译安装
+#   - LaBraM 官方微调脚本默认 --enable_deepspeed=False，不加该参数不会 import
